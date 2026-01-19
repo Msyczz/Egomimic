@@ -276,11 +276,19 @@ class SAM:
 
     def project_single_joint_position_to_image(self, qpos, extrinsics, intrinsics, arm="right"):
         joint_pos = self.fk.chain.forward_kinematics(qpos, end_only=False)
-        fk_positions = joint_pos['vx300s/ee_gripper_link'].get_matrix()[:, :3, 3]
-        wrist_positions = joint_pos['vx300s/wrist_link'].get_matrix()[:, :3, 3]
-        elbow_positions = joint_pos['vx300s/upper_forearm_link'].get_matrix()[:, :3, 3]
-        arm_positions = joint_pos['vx300s/ee_arm_link'].get_matrix()[:, :3, 3]
-        lower_forearm_positions = joint_pos['vx300s/lower_forearm_link'].get_matrix()[:, :3, 3]
+
+        fk_positions = joint_pos['gripper_base'].get_matrix()[:, :3, 3]
+        # 手腕附近：Piper 的 link5
+        wrist_positions = joint_pos['link5'].get_matrix()[:, :3, 3]
+        # 肘部附近：Piper 的 link3
+        elbow_positions = joint_pos['link3'].get_matrix()[:, :3, 3]
+        # 手臂中段（用作第三个提示点）：这里选 link4
+        arm_positions = joint_pos['link4'].get_matrix()[:, :3, 3]
+        # 前臂另一点（目前基本只调试用）：这里选 link4 或 link2 都行
+        lower_forearm_positions = joint_pos['link4'].get_matrix()[:, :3, 3]
+
+
+
 
 
         fk_positions = ee_pose_to_cam_frame(fk_positions, extrinsics)[:, :3]

@@ -231,6 +231,7 @@ def eval_real(model, env, rollout_dir, norm_stats, arm="right"):
                     info = model.forward_eval(input_batch, unnorm_stats=norm_stats)
 
                     all_actions = info["actions_joints_act"].cpu().numpy()
+                    print(info["actions_joints_act"].shape())
 
                     if TEMPORAL_AGG:
                         TA.add_action(all_actions[0])

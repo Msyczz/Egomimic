@@ -18,6 +18,11 @@ import os
 from egomimic.algo.act import ACT
 from egomimic.algo.egomimic import EgoMimic
 import scipy
+import datetime
+#add
+import imageio
+import matplotlib.pyplot as plt
+
 
 EXTRINSICS_RIGHT = EXTRINSICS["ariaJul29"]["right"]
 EXTRINSICS_LEFT = EXTRINSICS["ariaJul29"]["left"]
@@ -71,7 +76,7 @@ def draw_both_actions_on_frame(im, type, color, actions, arm="both"):
     return im
 
 
-
+#add tool 
 
 def evaluate_high_level_policy(
     model, data_loader, video_dir, ac_key, max_samples=None, type=None,
@@ -85,7 +90,16 @@ def evaluate_high_level_policy(
     acton_type: "xyz" or "joints"
     max_samples: maximum number of samples to evaluate
     """
+    #print(f"[DEBUG] evaluate_high_level_policy got type = {type!r}")
+    #print("[DEBUG] evaluate_high_level_policy GOT type =", type, " (value type:", type(type), ")")
+    #print("[DEBUG] evaluate_high_level_policy GOT type =", type)
+    #print("[DEBUG] actual python type:", __builtins__.type(type))
+    if type is None:
+        type = "robot"
 
+    #print("[DEBUG] evaluate_high_level_policy GOT type =", type)
+    
+    
     vid_dir_count = 0
     newvideo_dir = video_dir
     while os.path.isdir(newvideo_dir):
@@ -104,7 +118,7 @@ def evaluate_high_level_policy(
 
     count = 0
     vids_written = 0
-    T = 700
+    T = 500
     video = torch.zeros((T, 480, 640, 3))
 
     normalization_stats = data_loader.dataset.get_obs_normalization_stats()
@@ -158,6 +172,21 @@ def evaluate_high_level_policy(
                     pred_values = pred_values.reshape(-1, 3)
                 if actions.shape == (30,):
                     actions = actions.reshape(-1, 3)
+            if i == 0 and b == 0:
+                # pred_values 形状可能是 (T, 3) 或 (T, D)
+                pv = pred_values
+                if pv.ndim == 1:
+                    pv = pv.reshape(-1, 3)
+                else:
+                    pv = pv.reshape(pv.shape[0], -1)
+                    # 取前三维当作 (x, y, z)
+                traj_xyz = pv[:, :3]
+                save_dir = "traj_outputs"
+                os.makedirs(save_dir, exist_ok=True)
+                timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+                save_path = os.path.join(save_dir, f"traj_eval_{type}_{timestamp}.xyz")
+                np.savetxt(save_path, traj_xyz, fmt="%.6f")
+                print(f"[traj] saved predicted 3D trajectory to: {save_path}")
 
             ac_type = "joints" if "joints" in ac_key else "xyz"
 
@@ -167,7 +196,7 @@ def evaluate_high_level_policy(
             if actions.shape[1] == 14 or actions.shape[1] == 6:
                 arm = "both"
             elif actions.shape[1] == 7 or actions.shape[1] == 3:
-                arm = "right"
+                arm = "left"
 
             im = draw_both_actions_on_frame(im, ac_type, "Greens", actions, arm=arm)
             im = draw_both_actions_on_frame(im, ac_type, "Purples", pred_values, arm=arm)
@@ -177,13 +206,14 @@ def evaluate_high_level_policy(
                 actions_xyz = info["actions_xyz_act"][b].cpu().numpy()
                 actions_xyz = actions_xyz.reshape(-1, 3)
                 im = draw_both_actions_on_frame(im, "xyz", "Reds", actions_xyz, arm=arm)
+
             add_metrics(metrics, actions, pred_values)
             if count == T:
                 if video_dir is not None:
                     torchvision.io.write_video(
                         os.path.join(video_dir, f"{type}_{vids_written}.mp4"),
                         video[1:count],
-                        fps=30,
+                        fps=5,
                     )
                 # exit()
                 count = 0
@@ -194,7 +224,7 @@ def evaluate_high_level_policy(
             count += 1
 
     torchvision.io.write_video(
-        os.path.join(video_dir, f"{type}_{vids_written}.mp4"), video[1:count], fps=30
+        os.path.join(video_dir, f"{type}_{vids_written}.mp4"), video[1:count], fps=5
     )
     # summarize metrics
     summary_metrics = {}

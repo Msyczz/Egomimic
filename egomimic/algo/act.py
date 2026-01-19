@@ -435,6 +435,25 @@ class ACT(BC_VAE):
             batch, self.camera_keys, self.proprio_keys
         )
 
+         # ========= 这里加 debug =========
+        if not hasattr(self, "_debug_printed"):
+            self._debug_printed = True
+            print("\n[DEBUG] _robomimic_to_act_data 输出：")
+            print("  qpos.shape    =", qpos.shape)
+            print("  actions.shape =", None if actions is None else actions.shape)
+            print("  is_pad.shape  =", is_pad.shape)
+
+            if actions is not None:
+                b = 0
+                if actions.dim() == 4:
+                    print("  actions[b, :3, 0, :6]:")
+                    print(actions[b, :3, 0, :6])
+                elif actions.dim() == 3:
+                    print("  actions[b, :3, :6]:")
+                    print(actions[b, :3, :6])
+        # ==============================
+
+
         a_hat, is_pad_hat, (mu, logvar) = self.nets["policy"](
             qpos=qpos, image=images, env_state=env_state, actions=actions, is_pad=is_pad
         )
@@ -444,7 +463,20 @@ class ACT(BC_VAE):
         l1 = (all_l1 * ~is_pad.unsqueeze(-1)).mean()
         loss_dict["l1"] = l1
         loss_dict["kl"] = total_kld[0]
+       #---------------------debug------------------
+        valid_mask = (~is_pad).unsqueeze(-1)
+        l1_debug = (all_l1 * valid_mask).sum() / valid_mask.sum()
 
+        
+        if not hasattr(self, "_l1_debug_printed"):
+            self._l1_debug_printed = 0
+        if self._l1_debug_printed < 10:  # 前 10 个 batch 打印一下
+            self._l1_debug_printed += 1
+            print(f"[DEBUG] mean joint L1 over valid steps (rad): {l1_debug.item():.4f}")
+
+       
+        #---------------------------------------------
+    
         predictions = OrderedDict(
             actions=actions,
             kl_loss=loss_dict["kl"],
@@ -453,7 +485,7 @@ class ACT(BC_VAE):
 
         return predictions
 
-    def forward_eval(self, batch, unnorm_stats):
+    def forward_eval(self, batch, unnorm_stats):#def forward_eval(self, batch, unnorm_stats):
         """
         Internal helper function for BC algo class. Compute forward pass
         and return network outputs in @predictions dict.
@@ -476,6 +508,7 @@ class ACT(BC_VAE):
 
         if unnorm_stats:
             predictions = ObsUtils.unnormalize_batch(predictions, unnorm_stats)
+
 
         return predictions
 

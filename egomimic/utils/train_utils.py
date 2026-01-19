@@ -257,11 +257,15 @@ def run_rollout(
     total_reward = 0.0
     success = {k: False for k in env.is_success()}  # success metrics
 
+
+
     try:
         for step_i in range(horizon):
 
             # get action from policy
             ac = policy(ob=ob_dict, goal=goal_dict)
+
+        
 
             # play action
             ob_dict, r, done, _ = env.step(ac)
@@ -300,6 +304,8 @@ def run_rollout(
     for k in success:
         if k != "task":
             results["{}_Success_Rate".format(k)] = float(success[k])
+
+
 
     return results
 

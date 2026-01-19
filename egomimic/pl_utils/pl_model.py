@@ -1,3 +1,5 @@
+from pytorch_lightning.loggers import WandbLogger
+import wandb
 import os
 from collections import OrderedDict
 
@@ -130,7 +132,7 @@ class ModelWrapper(LightningModule):
 
     # def optimizer_zero_grad(self, epoch, batch_idx, optimizer, optimizer_idx):
     #     optimizer.zero_grad(optimizer_idx)
-
+    
     def custom_eval(self, video_dir):
         self.eval()
         self.zero_grad()
@@ -139,10 +141,25 @@ class ModelWrapper(LightningModule):
                 self.model,
                 self.datamodule.val_dataloader_1(),
                 video_dir,
-                ac_key=self.model.global_config.train.ac_key,
+                ac_key=self.model.global_config.train.ac_key,               
             )  # save vid only once every video_freq epochs
 
         return valid_step_log
+
+    def custom_eval_train(self, video_dir, type="robot"):
+        self.eval()
+        self.zero_grad()
+        with torch.no_grad():
+            step_log = ValUtils.evaluate_high_level_policy(
+                self.model,
+                self.datamodule.train_dataloader(),  # 用训练集
+                video_dir,
+                max_samples=self.model.global_config.experiment.validation_max_samples,
+                ac_key=self.model.global_config.train.ac_key,
+                type=type,
+            )
+        return step_log
+
 
     def on_train_epoch_start(self):
         # flatten and take the mean of the metrics
@@ -199,6 +216,19 @@ class ModelWrapper(LightningModule):
                 if self.dual_dl:
                     for k, v in valid_step_log_2.items():
                         self.log("Valid/" + k, v, sync_dist=False)
+
+                if pass_vid is not None and isinstance(self.loggers,WandbLogger):
+                    if os.path.exists(pass_vid):
+                        for fname in os.listdir(pass_vid):
+                            if fname.endswith(".mp4"):
+                                video_path = os.path.join(pass_vid,fname)
+                                self.loggers.experiment.log({
+                                    f"val_video/epoch_(self.current_epoch)_{fname}":wandb.Video(
+                                        video_path,
+                                        fps=10,
+                                        format="mp4"
+                                    )
+                                })
 
         # Finally, log memory usage in MB
         process = psutil.Process(os.getpid())

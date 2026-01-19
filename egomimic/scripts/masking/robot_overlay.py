@@ -70,7 +70,18 @@ def main(args):
     sam = SAM()
 
     arm = args.arm
-    chain = pk.build_serial_chain_from_urdf(open("/coc/flash9/skareer6/Projects/EgoPlay/EgoPlay/egomimic/resources/model.urdf").read(), "vx300s/ee_gripper_link")
+    
+    
+    from pathlib import Path
+    
+    ROOT = Path(__file__).resolve().parents[2]
+    urdf_path = ROOT / "resources" / "model.urdf"
+    
+    ee_link = "gripper_base"   # <span class="emoji emoji26a0"><
+    
+    with open(urdf_path, "r") as f:
+        chain = pk.build_serial_chain_from_urdf(f.read(), ee_link)
+
 
     with h5py.File(args.dataset, 'r+') as aloha_hdf5, torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
         keys_list = list(aloha_hdf5['data'].keys())

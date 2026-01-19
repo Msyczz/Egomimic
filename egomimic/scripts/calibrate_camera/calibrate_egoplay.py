@@ -17,7 +17,7 @@ from egomimic.utils.egomimicUtils import (
 
 from scipy.spatial.transform import Rotation as Rot
 import matplotlib.pyplot as plt
-from rpl_vision_utils.utils.apriltag_detector import AprilTagDetector
+from rpl_cv.utils.apriltag_detector import AprilTagDetector
 
 
 def parse_args():

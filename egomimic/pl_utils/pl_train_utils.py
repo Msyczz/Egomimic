@@ -1,12 +1,18 @@
-import json
 import os
+#CHANGE
+os.environ["PL_DISABLE_FORK"] = "1"
+for k in list(os.environ.keys()):
+            if k.startswith("SLURM_"):
+                    os.environ.pop(k)
 import robomimic.utils.obs_utils as ObsUtils
+import json
 import torch
 from pytorch_lightning import Trainer, seed_everything, Callback
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.strategies import DDPStrategy
 from pytorch_lightning.plugins.environments import SLURMEnvironment
+
 
 import robomimic.utils.obs_utils as ObsUtils
 import robomimic.utils.file_utils as FileUtils
@@ -30,7 +36,10 @@ from datetime import timedelta
 import pickle
 import time
 import egomimic
+import wandb
 
+
+'''
 class PreemptionHandler(Callback):
     def __init__(self):
         super().__init__()
@@ -68,6 +77,8 @@ class PreemptionHandler(Callback):
 
         else:
             print("Trainer reference is not set. Cannot save checkpoint.")
+'''
+
 
 
 def init_dataset(config, dataset_path, type, alternate_valid_path=None):
@@ -134,6 +145,48 @@ def eval(config, ckpt_path, type):
 
     print(step_log)
 
+#train
+def eval_train(config, ckpt_path, type):
+    """
+    在【训练集】上做一次评估，看模型有没有 overfit。
+    会在 exp_dir/train_eval_videos 下保存视频和一个 train_step_log.txt。
+    """
+
+    resume_dir = os.path.dirname(os.path.dirname(ckpt_path))
+    video_dir = os.path.join(resume_dir, "train_eval_videos")
+
+    dataset_path = os.path.expanduser(config.train.data)
+    ObsUtils.initialize_obs_utils_with_config(config)
+
+    # 与 eval 一致
+    trainset, validset, shape_meta = init_dataset(config, dataset_path, type)
+
+    train_sampler = trainset.get_dataset_sampler()
+    valid_sampler = validset.get_dataset_sampler()
+
+    datamodule = get_data_module(
+        trainset, validset, train_sampler, valid_sampler, config
+    )
+
+    model = ModelWrapper.load_from_checkpoint(
+        ckpt_path,
+        datamodule=datamodule,
+        config_json=json.dumps(config),
+    )
+
+    # 使用我们在 ModelWrapper 里新增的 custom_eval_train
+    step_log = model.custom_eval_train(video_dir, type=type)
+
+    # 创建目录并写入指标文件
+    os.makedirs(video_dir, exist_ok=True)
+    with open(os.path.join(video_dir, "train_step_log.txt"), "w") as f:
+        for k, v in step_log.items():
+            f.write(f"{k}: {v}\n")
+
+    print("==== Train-set evaluation metrics ====")
+    print(step_log)
+
+
 
 def train(config, ckpt_path=None):
     """
@@ -142,7 +195,10 @@ def train(config, ckpt_path=None):
     os.environ['NCCL_BLOCKING_WAIT'] = '1'
     os.environ['TORCH_NCCL_BLOCKING_WAIT'] = '1'
 
-    RANK = int(os.environ["SLURM_PROCID"])
+    #change
+    #RANK = int(os.environ["SLURM_PROCID"])
+    RANK = 0
+
     torch.set_float32_matmul_precision("medium")
     seed_everything(config.train.seed, workers=True)
 
@@ -186,6 +242,8 @@ def train(config, ckpt_path=None):
     )
     if config.train.hdf5_normalize_obs:
         print("Normalization stats for dataset 1: ", trainset.get_obs_normalization_stats())
+        os.makedirs(os.path.join(log_dir, ".."), exist_ok=True)
+       
         with open(os.path.join(log_dir, "..", "ds1_norm_stats.pkl"), "wb") as pickle_file:
             pickle.dump(trainset.get_obs_normalization_stats(), pickle_file)
 
@@ -243,7 +301,7 @@ def train(config, ckpt_path=None):
             save_top_k=-1,
             save_last="link"
         ),
-        PreemptionHandler()
+        #PreemptionHandler()
         # ModelCheckpoint(
         #     dirpath=ckpt_dir,
         #     save_on_train_epoch_end=True,
@@ -261,8 +319,11 @@ def train(config, ckpt_path=None):
         max_epochs=config.train.num_epochs,
         limit_train_batches=config.experiment.epoch_every_n_steps,
         accelerator="gpu",
-        devices=config.train.gpus_per_node,
-        num_nodes=config.train.num_nodes,
+        #devices=config.train.gpus_per_node,
+        #CHANGE
+        devices=1,
+        #num_nodes=config.train.num_nodes,
+        num_nodes=1,
         logger=loggers,
         default_root_dir=exp_dir,
         callbacks=callbacks,
@@ -274,12 +335,17 @@ def train(config, ckpt_path=None):
         # precision=16 if config.train.amp_enabled else 32,
         precision=32,
         reload_dataloaders_every_n_epochs=0,
-        use_distributed_sampler=True,
-        strategy=DDPStrategy(
-            find_unused_parameters=True,
-            process_group_backend="nccl",
-            timeout=timedelta(minutes=60)
-        ),
+        use_distributed_sampler=False,
+        #change
+        
+        #strategy=DDPStrategy(
+        #    find_unused_parameters=True,
+        #    process_group_backend="nccl",
+        #   timeout=timedelta(minutes=60)
+        #),
+        strategy="auto",
+
+
         # strategy="ddp_find_unused_parameters_true",
         profiler="simple",
         # profiler=AdvancedProfiler(dirpath=".", filename="perf_logs")

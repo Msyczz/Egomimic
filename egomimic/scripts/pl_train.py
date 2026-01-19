@@ -34,6 +34,12 @@ import egomimic
 
 
 def main(args):
+
+    os.environ.setdefault("SLURM_PROCID","0")
+    os.environ.setdefault("SLURM_LOCALID","0")
+    os.environ.setdefault("SLURM_NODEID","0")
+    os.environ.setdefault("SLURM_NTASKS","0")
+
     # set random seeds
     torch.manual_seed(0)
     torch.backends.cudnn.deterministic = True
@@ -126,8 +132,12 @@ def main(args):
         config.observation.encoder.rgb.obs_randomizer_kwargs.hue_min = args.hue[0]
         config.observation.encoder.rgb.obs_randomizer_kwargs.hue_max = args.hue[1]
 
-    config.train.gpus_per_node = args.gpus_per_node
-    config.train.num_nodes = args.num_nodes
+    #config.train.gpus_per_node = rgs.gpus_pear_node
+    #config.train.num_nodes = args.num_nodes
+    config.train.gpus_per_node = 1
+    config.train.num_nodes = 1
+
+
     # maybe modify config for debugging purposes
     if args.debug:
         # shrink length of training to test whether this run is likely to crash
@@ -196,7 +206,9 @@ def main(args):
     important_stats = None
     try:
         if args.eval:
-            eval(config, args.ckpt_path, type=config.train.data_type)
+            #debug
+            eval(config, args.ckpt_path, type="robot")
+           # eval(config, args.ckpt_path, type=config.train.data_type)
             return
         else:
             important_stats = train(config, args.ckpt_path)
